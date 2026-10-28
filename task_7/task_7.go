@@ -3,41 +3,40 @@ package main
 import (
 	"context"
 	"fmt"
-	"sync"
+	"runtime"
 	"time"
 )
 
-func process(ctx context.Context, wg *sync.WaitGroup) {
+func process(ctx context.Context) {
 	result := make(chan int)
-	defer wg.Done()
+	defer close(result)
+
 	go func() {
-		time.Sleep(5 * time.Second)
-		result <- 42
-		close(result)
+		select {
+		case <-time.After(5 * time.Second):
+			result <- 42
+
+		case <-ctx.Done():
+			fmt.Println("can")
+			return
+		}
 	}()
 
 	select {
-
-	case value, ok := <-result:
-		if !ok {
-			fmt.Println("closed")
-			return
-		}
+	case value := <-result:
 		fmt.Println(value)
 	case <-ctx.Done():
 		fmt.Println("cancelled")
 	}
+
 }
 func main() {
-
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	var wg sync.WaitGroup
+	defer cancel()
 
-	wg.Add(1)
+	process(ctx)
 
-	go process(ctx, &wg)
-
-	wg.Wait()
-	cancel()
+	time.Sleep(2 * time.Second)
+	fmt.Println(runtime.NumGoroutine())
 
 }
